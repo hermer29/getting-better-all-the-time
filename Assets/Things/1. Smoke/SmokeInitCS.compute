@@ -1,0 +1,20 @@
+﻿#pragma kernel SmokeInitCS
+
+RWTexture3D<float> Density;
+Texture2D<float> PerlinNoise;
+SamplerState sampler_PerlinNoise; 
+float NoiseScale;
+
+[numthreads(8, 8, 8)]
+void SmokeInitCS(uint3 id : SV_DispatchThreadID)
+{
+    // Нормализованные координаты [0..1]
+    float3 uv = float3(id.xyz) / float3(32, 32, 32);
+    
+    // Сэмплируем 2D-шум (повторяем его по оси Z)
+    float2 noiseUV = uv.xy * NoiseScale;
+    float noise = PerlinNoise.SampleLevel(sampler_PerlinNoise, noiseUV, 0);
+    
+    // Записываем в 3D-текстуру
+    Density[id.xyz] = noise * (1.0 - uv.z); // Пример: дым слабее к верху
+}

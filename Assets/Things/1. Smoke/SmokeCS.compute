@@ -1,0 +1,40 @@
+﻿#pragma kernel SmokeCS
+
+Texture2D<float> Perlin;
+SamplerState sampler_Perlin;  // Сэмплер
+RWTexture3D<float> Density;  // Плотность дыма
+RWTexture3D<float3> Velocity;  // Поле скорости
+float3 WindForce;  // Внешняя сила (ветер)
+float TimeStep;
+
+float SampleDensity(float3 prevPos)
+{
+    return Density[prevPos];
+}
+
+float3 CalculateVorticity(float3 id)
+{
+    float2 uv = id.xy / 32.0;  // Пример: нормализация под размер 32x32
+    float noise = Perlin.SampleLevel(sampler_Perlin, uv, 0);
+    return float3(noise, noise, noise) * 2.0 - 1.0;  // Преобразование в [-1..1]
+}
+
+[numthreads(8, 8, 8)]
+void SmokeCS(uint3 id : SV_DispatchThreadID)
+{
+    // 1. Перенос плотности (Advection)
+    float3 prevPos = id - Velocity[id.xyz] * TimeStep;
+    Density[id.xyz] = SampleDensity(prevPos); // Билинейная интерполяция
+
+    // 2. Добавление случайных завихрений
+    float3 vorticity = CalculateVorticity(id.xyz);
+    Velocity[id.xyz] += vorticity * 0.1;
+
+    // 3. Подъёмная сила (чем горячее, тем быстрее вверх)
+    float buoyancy = Density[id.xyz] * 0.5;
+    Velocity[id.xyz].y += buoyancy * TimeStep;
+
+    // 4. Применение ветра
+    Velocity[id.xyz] += WindForce * TimeStep;
+}
+
